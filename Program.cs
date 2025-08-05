@@ -53,6 +53,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddSingleton<JwtHelper>();
+builder.Services.AddScoped<IChartOfAccountService, ChartOfAccountService>();
 
 // [4] JWT Auth Setup with International API Standard Error Handling
 var jwtConfig = builder.Configuration.GetSection("Jwt");
