@@ -1,0 +1,51 @@
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio files
+.vs/
+
+# Rider files
+.idea/
+
+# Resharper files
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# ASP.NET Core files
+appsettings.Development.json
+
+# Publish output
+publish/
+
+# NuGet Packages
+*.nupkg
+# The packages folder can be ignored because of PackageReference in project files
+# /packages/
+
+# Backup files
+*.bak
+*.backup
+
+# Log files
+*.log
+
+# dotCover files
+*.dotCover
+
+# JetBrains Rider
+.idea/
+
+# Azure Functions local settings
+local.settings.json
