@@ -1,0 +1,6 @@
+@SamaraCloudsApi_HostAddress = http://localhost:5129
+
+GET {{SamaraCloudsApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
