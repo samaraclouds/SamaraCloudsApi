@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SamaraClouds API Docs</title>
+    <link rel="icon" href="/docs/favicon.png" />
+    <meta charset="utf-8" />
+    <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+    <style>
+      body {
+        margin: 0;
+        font-family: 'Poppins', sans-serif;
+        background: #fffaf8;
+      }
+      rapi-doc::part(header){
+        font-size: 1.2rem !important;
+        font-family: 'Poppins', sans-serif !important;
+        font-weight: 600;
+      }
+      rapi-doc::part(navbar){
+        font-size: 1rem !important;
+        font-family: 'Poppins', sans-serif !important;
+      }
+      rapi-doc::part(section-title){
+        font-size: 1.1rem !important;
+        font-family: 'Poppins', sans-serif !important;
+        font-weight: 600;
+      }
+      rapi-doc::part(title){
+        font-size: 1.1rem !important;
+        font-family: 'Poppins', sans-serif !important;
+        font-weight: 600;
+      }
+      rapi-doc {
+        --primary-color: #fa7268;
+        --font-family: 'Poppins', sans-serif;
+        --nav-bg-color: #ffffff;
+        --nav-text-color: #222;
+        --nav-hover-bg-color: #fff3ee;
+        --nav-accent-color: #fa7268;
+      }
+    </style>
+  </head>
+  <body>
+    <rapi-doc
+      spec-url="/swagger/v1/swagger.json"
+      theme="light"
+      render-style="focused"
+      show-header="true"
+      allow-try="true"
+      allow-authentication="true"
+      font-size="small"
+      show-method-in-nav-bar="as-colored-block"
+      regular-font="Poppins, sans-serif"
+      nav-bg-color="#ffffff"
+      nav-text-color="#222"
+      primary-color="#fa7268"
+    >
+      <img slot="logo" src="/docs/logo.png" style="height:34px;margin-left:10px;" />
+    </rapi-doc>
+  </body>
+</html>

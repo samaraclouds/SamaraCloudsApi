@@ -16,14 +16,6 @@ namespace SamaraCloudsApi.Controllers
             _productService = productService;
         }
 
-        /// <summary>
-        /// Get all products (search, filter by customer, date range)
-        /// </summary>
-        /// <param name="customerId">Customer ID (default 0 = all customers)</param>
-        /// <param name="search">Search keyword (optional, product code/name)</param>
-        /// <param name="dateFrom">Created date from (optional)</param>
-        /// <param name="dateTo">Created date to (optional)</param>
-        /// <returns>List of products</returns>
         [Authorize]
         [HttpGet("view-all")]
         public async Task<IActionResult> ViewAll(
@@ -32,26 +24,12 @@ namespace SamaraCloudsApi.Controllers
             [FromQuery] DateTime? dateFrom = null,
             [FromQuery] DateTime? dateTo = null)
         {
-            try
-            {
-                var data = await _productService.ViewAllAsync(customerId, search, dateFrom, dateTo);
-                return Ok(new
-                {
-                    success = true,
-                    message = "Product list retrieved successfully.",
-                    count = data.Count(),
-                    data
-                });
-            }
-            catch (Exception) // <-- Hilangkan "ex"
-            {
-                return StatusCode(500, new
-                {
-                    success = false,
-                    error = "internal_error",
-                    message = "An unexpected error occurred while fetching products."
-                });
-            }
+            var data = await _productService.ViewAllAsync(customerId, search, dateFrom, dateTo);
+
+            // Karena sudah ada ApiResponseWrapperFilter global,
+            // kita cukup return data mentahnya saja,
+            // nanti filter akan bungkus response secara otomatis.
+            return Ok(data);
         }
     }
 }

@@ -31,7 +31,7 @@ namespace SamaraCloudsApi.Services
                 date_to = dateTo
             };
             var result = await conn.QueryAsync<ChartOfAccountViewDto>(
-                "fin_chart_of_account_view_all",
+                "sp_fin_chart_of_account_view_all",
                 param,
                 commandType: CommandType.StoredProcedure);
             return result;
@@ -60,7 +60,7 @@ namespace SamaraCloudsApi.Services
             // Output parameter to get new account ID from SP
             param.Add("NewAccountId", dbType: DbType.Int32, direction: ParameterDirection.Output);
 
-            await conn.ExecuteAsync("fin_chart_of_account_create", param, commandType: CommandType.StoredProcedure);
+            await conn.ExecuteAsync("sp_fin_chart_of_account_create", param, commandType: CommandType.StoredProcedure);
 
             return param.Get<int>("NewAccountId");
         }
@@ -89,7 +89,7 @@ namespace SamaraCloudsApi.Services
                 description = dto.Description
             };
 
-            await conn.ExecuteAsync("fin_chart_of_account_update", param, commandType: CommandType.StoredProcedure);
+            await conn.ExecuteAsync("sp_fin_chart_of_account_update", param, commandType: CommandType.StoredProcedure);
         }
 
         public async Task DeleteAsync(int accountId, int deletedBy)
@@ -101,7 +101,7 @@ namespace SamaraCloudsApi.Services
                 deleted_by = deletedBy
             };
 
-            await conn.ExecuteAsync("fin_chart_of_account_delete", param, commandType: CommandType.StoredProcedure);
+            await conn.ExecuteAsync("sp_fin_chart_of_account_delete", param, commandType: CommandType.StoredProcedure);
         }
     }
 }

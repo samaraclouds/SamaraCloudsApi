@@ -3,6 +3,7 @@ using SamaraCloudsApi.Models;
 using SamaraCloudsApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
 
 namespace SamaraCloudsApi.Controllers
 {
@@ -31,44 +32,54 @@ namespace SamaraCloudsApi.Controllers
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             if (request == null)
-                return BadRequest(new
+                return BadRequest(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "empty_request",
-                    message = "Request body cannot be empty."
+                    Status = (int)HttpStatusCode.BadRequest,
+                    Code = "EMPTY_REQUEST",
+                    Message = "Request body cannot be empty.",
+                    Errors = null,
+                    Data = null
                 });
 
             if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-                return BadRequest(new
+                return BadRequest(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "validation_error",
-                    message = "Username and password are required."
+                    Status = (int)HttpStatusCode.BadRequest,
+                    Code = "VALIDATION_ERROR",
+                    Message = "Username and password are required.",
+                    Errors = null,
+                    Data = null
                 });
 
             var user = await _userService.GetUserByUsernameAsync(request.Username);
             if (user == null)
-                return Unauthorized(new
+                return Unauthorized(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "invalid_credentials",
-                    message = "Username or password is incorrect."
+                    Status = (int)HttpStatusCode.Unauthorized,
+                    Code = "INVALID_CREDENTIALS",
+                    Message = "Username or password is incorrect.",
+                    Errors = null,
+                    Data = null
                 });
 
             if (string.IsNullOrEmpty(user.PasswordHash))
-                return BadRequest(new
+                return BadRequest(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "invalid_user",
-                    message = "Password in database is empty."
+                    Status = (int)HttpStatusCode.BadRequest,
+                    Code = "INVALID_USER",
+                    Message = "Password in database is empty.",
+                    Errors = null,
+                    Data = null
                 });
 
             if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-                return Unauthorized(new
+                return Unauthorized(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "invalid_credentials",
-                    message = "Username or password is incorrect."
+                    Status = (int)HttpStatusCode.Unauthorized,
+                    Code = "INVALID_CREDENTIALS",
+                    Message = "Username or password is incorrect.",
+                    Errors = null,
+                    Data = null
                 });
 
             var accessToken = _jwtHelper.GenerateAccessToken(user.Username);
@@ -85,11 +96,13 @@ namespace SamaraCloudsApi.Controllers
             };
             await _refreshTokenService.AddAsync(refresh);
 
-            return Ok(new
+            return Ok(new ApiResponse<object>
             {
-                success = true,
-                message = "Login successful.",
-                data = new
+                Status = (int)HttpStatusCode.OK,
+                Code = "SUCCESS",
+                Message = "Login successful.",
+                Errors = null,
+                Data = new
                 {
                     accessToken,
                     refreshToken
@@ -105,11 +118,13 @@ namespace SamaraCloudsApi.Controllers
         {
             var token = await _refreshTokenService.GetAsync(refreshToken);
             if (token == null || token.IsRevoked || token.ExpiryDate < DateTime.UtcNow)
-                return Unauthorized(new
+                return Unauthorized(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "invalid_refresh_token",
-                    message = "Refresh token is invalid or expired."
+                    Status = (int)HttpStatusCode.Unauthorized,
+                    Code = "INVALID_REFRESH_TOKEN",
+                    Message = "Refresh token is invalid or expired.",
+                    Errors = null,
+                    Data = null
                 });
 
             var newAccessToken = _jwtHelper.GenerateAccessToken(token.Username);
@@ -125,11 +140,13 @@ namespace SamaraCloudsApi.Controllers
             };
             await _refreshTokenService.AddAsync(newTokenObj);
 
-            return Ok(new
+            return Ok(new ApiResponse<object>
             {
-                success = true,
-                message = "Token refreshed.",
-                data = new
+                Status = (int)HttpStatusCode.OK,
+                Code = "SUCCESS",
+                Message = "Token refreshed.",
+                Errors = null,
+                Data = new
                 {
                     accessToken = newAccessToken,
                     refreshToken = newRefreshToken
@@ -145,10 +162,13 @@ namespace SamaraCloudsApi.Controllers
         public async Task<IActionResult> Logout([FromBody] string refreshToken)
         {
             await _refreshTokenService.RevokeAsync(refreshToken);
-            return Ok(new
+            return Ok(new ApiResponse<object>
             {
-                success = true,
-                message = "Logout successful."
+                Status = (int)HttpStatusCode.OK,
+                Code = "SUCCESS",
+                Message = "Logout successful.",
+                Errors = null,
+                Data = null
             });
         }
 
@@ -160,54 +180,67 @@ namespace SamaraCloudsApi.Controllers
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.OldPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
-                return BadRequest(new
+                return BadRequest(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "validation_error",
-                    message = "Old password and new password are required."
+                    Status = (int)HttpStatusCode.BadRequest,
+                    Code = "VALIDATION_ERROR",
+                    Message = "Old password and new password are required.",
+                    Errors = null,
+                    Data = null
                 });
 
             var username = User.Identity?.Name;
             if (string.IsNullOrEmpty(username))
-                return Unauthorized(new
+                return Unauthorized(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "unauthorized",
-                    message = "Unauthorized."
+                    Status = (int)HttpStatusCode.Unauthorized,
+                    Code = "UNAUTHORIZED",
+                    Message = "Unauthorized.",
+                    Errors = null,
+                    Data = null
                 });
 
             var user = await _userService.GetUserByUsernameAsync(username);
             if (user == null)
-                return Unauthorized(new
+                return Unauthorized(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "user_not_found",
-                    message = "User not found."
+                    Status = (int)HttpStatusCode.Unauthorized,
+                    Code = "USER_NOT_FOUND",
+                    Message = "User not found.",
+                    Errors = null,
+                    Data = null
                 });
 
             if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, user.PasswordHash))
-                return BadRequest(new
+                return BadRequest(new ApiResponse<object>
                 {
-                    success = false,
-                    error = "invalid_old_password",
-                    message = "Old password is incorrect."
+                    Status = (int)HttpStatusCode.BadRequest,
+                    Code = "INVALID_OLD_PASSWORD",
+                    Message = "Old password is incorrect.",
+                    Errors = null,
+                    Data = null
                 });
 
             var newPasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
 
             var updated = await _userService.UpdatePasswordAsync(username, newPasswordHash);
             if (!updated)
-                return StatusCode(500, new
+                return StatusCode(500, new ApiResponse<object>
                 {
-                    success = false,
-                    error = "update_failed",
-                    message = "Failed to update password."
+                    Status = 500,
+                    Code = "UPDATE_FAILED",
+                    Message = "Failed to update password.",
+                    Errors = null,
+                    Data = null
                 });
 
-            return Ok(new
+            return Ok(new ApiResponse<object>
             {
-                success = true,
-                message = "Password changed successfully."
+                Status = (int)HttpStatusCode.OK,
+                Code = "SUCCESS",
+                Message = "Password changed successfully.",
+                Errors = null,
+                Data = null
             });
         }
     }

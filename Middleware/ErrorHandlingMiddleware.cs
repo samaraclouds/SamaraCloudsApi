@@ -1,6 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using SamaraCloudsApi.Models; // Pastikan ApiErrorResponse di sini
 
 namespace SamaraCloudsApi.Middleware
 {
@@ -11,9 +15,9 @@ namespace SamaraCloudsApi.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<ErrorHandlingMiddleware> _logger;
-        private readonly IWebHostEnvironment _env;
+        private readonly IHostEnvironment _env;
 
-        public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger, IWebHostEnvironment env)
+        public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger, IHostEnvironment env)
         {
             _next = next;
             _logger = logger;
@@ -29,84 +33,89 @@ namespace SamaraCloudsApi.Middleware
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An unhandled exception occurred: {Message}", ex.Message);
-                await HandleExceptionAsync(context, ex, _env, _logger);
+                await HandleExceptionAsync(context, ex, _env);
             }
         }
 
-        private static async Task HandleExceptionAsync(HttpContext context, Exception exception, IWebHostEnvironment env, ILogger logger)
+        private static async Task HandleExceptionAsync(HttpContext context, Exception exception, IHostEnvironment env)
         {
             context.Response.ContentType = "application/json";
+
             int statusCode = (int)HttpStatusCode.InternalServerError;
+            string code = "INTERNAL_SERVER_ERROR";
             string message = "An error occurred while processing your request.";
-            string error = exception.Message;
+            object errors = exception.Message;
 
-            // Default structure
-            var response = new ErrorResponse
-            {
-                Success = false,
-                Message = message,
-                Error = error,
-                Timestamp = DateTime.UtcNow
-            };
-
-            // Tambahkan pengecekan tipe exception
+            // Tentukan status code dan code string sesuai exception type
             switch (exception)
             {
                 case ValidationException ve:
                     statusCode = (int)HttpStatusCode.BadRequest;
-                    response.Message = "Validation failed.";
-                    response.Error = ve.Message;
+                    code = "BAD_REQUEST";
+                    message = "Validation failed.";
+                    errors = ve.Message;
                     break;
                 case ArgumentException ae:
                     statusCode = (int)HttpStatusCode.BadRequest;
-                    response.Message = "Invalid request parameters.";
-                    response.Error = ae.Message;
+                    code = "BAD_REQUEST";
+                    message = "Invalid request parameters.";
+                    errors = ae.Message;
                     break;
                 case UnauthorizedAccessException ue:
                     statusCode = (int)HttpStatusCode.Unauthorized;
-                    response.Message = "Access denied.";
-                    response.Error = ue.Message;
+                    code = "UNAUTHORIZED";
+                    message = "Access denied.";
+                    errors = ue.Message;
                     break;
                 case InvalidOperationException ioe:
                     statusCode = (int)HttpStatusCode.BadRequest;
-                    response.Message = "Invalid operation.";
-                    response.Error = ioe.Message;
+                    code = "BAD_REQUEST";
+                    message = "Invalid operation.";
+                    errors = ioe.Message;
                     break;
-                // TODO: Tambahkan custom exception lain di sini
-            }
-
-            // Untuk development, tampilkan inner exception dan stacktrace
-            if (env.IsDevelopment())
-            {
-                response.Details = exception.ToString();
-                if (exception.InnerException != null)
-                {
-                    response.InnerError = exception.InnerException.Message;
-                }
+                // Tambah case exception lain jika perlu
             }
 
             context.Response.StatusCode = statusCode;
 
-            var jsonResponse = JsonSerializer.Serialize(response, new JsonSerializerOptions
+            var errorResponse = new ApiErrorResponse
+            {
+                Status = statusCode,
+                Code = code,
+                Message = message,
+                Errors = errors
+            };
+
+            // Jika development, tambahkan detail exception (stacktrace, inner exception)
+            if (env.IsDevelopment())
+            {
+                var detailedErrors = new
+                {
+                    errorResponse.Status,
+                    errorResponse.Code,
+                    errorResponse.Message,
+                    Errors = errors,
+                    Exception = exception.ToString(),
+                    InnerException = exception.InnerException?.Message
+                };
+
+                var detailedJson = JsonSerializer.Serialize(detailedErrors, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = false
+                });
+
+                await context.Response.WriteAsync(detailedJson);
+                return;
+            }
+
+            var jsonResponse = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 WriteIndented = false
             });
 
             await context.Response.WriteAsync(jsonResponse);
-        }
-
-        /// <summary>
-        /// Standard error response format.
-        /// </summary>
-        public class ErrorResponse
-        {
-            public bool Success { get; set; }
-            public string Message { get; set; } = default!;
-            public string Error { get; set; } = default!;
-            public DateTime Timestamp { get; set; }
-            public string? Details { get; set; }    // For development
-            public string? InnerError { get; set; } // For development
         }
     }
 }

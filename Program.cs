@@ -1,20 +1,49 @@
 using SamaraCloudsApi.Data;
 using SamaraCloudsApi.Helpers;
 using SamaraCloudsApi.Middleware;
+using SamaraCloudsApi.Models;
 using SamaraCloudsApi.Services;
+using SamaraCloudsApi.Extensions; // <= TAMBAHKAN INI
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json;
 using Microsoft.IdentityModel.JsonWebTokens;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
-// [1] Controller
-builder.Services.AddControllers();
+// [1] Controller + Filter global + Validasi model standart
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ApiResponseWrapperFilter>();
+})
+.ConfigureApiBehaviorOptions(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var errors = context.ModelState
+            .Where(e => e.Value.Errors.Count > 0)
+            .ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.Errors.Select(e => e.ErrorMessage).ToArray()
+            );
 
-// [2] Swagger + JWT Auth di Swagger
+        var errorResponse = new ApiErrorResponse
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Code = "VALIDATION_ERROR",
+            Message = "One or more validation errors occurred.",
+            Errors = errors
+        };
+
+        return new BadRequestObjectResult(errorResponse);
+    };
+});
+
+// [2] Swagger + JWT di Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
 {
@@ -47,7 +76,7 @@ builder.Services.AddSwaggerGen(o =>
     });
 });
 
-// [3] Dependency Injection (tanpa repository, langsung ke service)
+// [3] Dependency Injection
 builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -55,11 +84,23 @@ builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddScoped<IChartOfAccountService, ChartOfAccountService>();
 
-// [4] JWT Auth Setup with International API Standard Error Handling
+// [4] JWT Config
 var jwtConfig = builder.Configuration.GetSection("Jwt");
-var jwtSecret = jwtConfig["Secret"] ?? throw new InvalidOperationException("JWT Secret is not configured");
+
+string? jwtSecretRaw = jwtConfig["Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecretRaw))
+    throw new InvalidOperationException("JWT Secret is not configured");
+
+string jwtSecret = jwtSecretRaw;
 var key = Encoding.ASCII.GetBytes(jwtSecret);
 
+string? issuerRaw = jwtConfig["Issuer"];
+string issuer = string.IsNullOrWhiteSpace(issuerRaw) ? "SamaraCloudsApi" : issuerRaw;
+
+string? audienceRaw = jwtConfig["Audience"];
+string audience = string.IsNullOrWhiteSpace(audienceRaw) ? "SamaraCloudsApiUsers" : audienceRaw;
+
+// [5] Authentication with JWT
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -67,7 +108,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false; // Set to true in production!
+    options.RequireHttpsMetadata = false; // Set true in production
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -75,12 +116,12 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtConfig["Issuer"] ?? "SamaraCloudsApi",
-        ValidAudience = jwtConfig["Audience"] ?? "SamaraCloudsApiUsers",
+        ValidIssuer = issuer,
+        ValidAudience = audience,
         IssuerSigningKey = new SymmetricSecurityKey(key),
         ClockSkew = TimeSpan.Zero
     };
-    // Professional error handler
+
     options.Events = new JwtBearerEvents
     {
         OnAuthenticationFailed = context =>
@@ -89,49 +130,61 @@ builder.Services.AddAuthentication(options =>
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.ContentType = "application/json";
 
-            string errorType, errorMessage;
+            string code = "INVALID_TOKEN";
+            string message = "JWT token is invalid.";
+
             if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
             {
-                errorType = "token_expired";
-                errorMessage = "JWT token has expired.";
-            }
-            else
-            {
-                errorType = "invalid_token";
-                errorMessage = "JWT token is invalid.";
+                code = "TOKEN_EXPIRED";
+                message = "JWT token has expired.";
             }
 
-            var result = JsonSerializer.Serialize(new
+            var errorResponse = new ApiErrorResponse
             {
-                success = false,
-                error = errorType,
-                message = errorMessage
+                Status = context.Response.StatusCode,
+                Code = code,
+                Message = message,
+                Errors = context.Exception.Message
+            };
+
+            var json = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
             });
-            return context.Response.WriteAsync(result);
+
+            return context.Response.WriteAsync(json);
         },
         OnChallenge = context =>
         {
-            // Triggered if token missing or Bearer missing in header
             if (!context.Response.HasStarted)
             {
                 context.HandleResponse();
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 context.Response.ContentType = "application/json";
 
-                var result = JsonSerializer.Serialize(new
+                var errorResponse = new ApiErrorResponse
                 {
-                    success = false,
-                    error = "unauthorized",
-                    message = "Authorization header missing or not Bearer token."
+                    Status = context.Response.StatusCode,
+                    Code = "UNAUTHORIZED",
+                    Message = "Authorization header missing or not Bearer token.",
+                    Errors = null
+                };
+
+                var json = JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = false
                 });
-                return context.Response.WriteAsync(result);
+
+                return context.Response.WriteAsync(json);
             }
             return Task.CompletedTask;
         }
     };
 });
 
-// [6] CORS jika perlu
+// [6] CORS jika diperlukan
 // builder.Services.AddCors(options =>
 // {
 //     options.AddPolicy("AllowAll", policy =>
@@ -144,24 +197,56 @@ builder.Services.AddAuthentication(options =>
 
 var app = builder.Build();
 
-// [7] Pipeline Middleware
-
-// ErrorHandling harus paling atas (supaya catch semua error)
+// [7] Middleware global (wajib di atas routing & auth)
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
-// Swagger UI aktif hanya di development (aman untuk production)
-if (app.Environment.IsDevelopment())
+// [8] Routing Khusus (Custom redirect endpoint friendly)
+app.MapDocRedirects();
+
+app.MapGet("/", context =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(o =>
+    context.Response.Redirect("/docs");
+    return Task.CompletedTask;
+});
+
+// [9] Static Files & Swagger
+app.UseDefaultFiles(); // untuk index.html
+app.UseStaticFiles();
+
+// --- SWAGGER UI DILINDUNGI ADMIN ---
+app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/swagger") 
+    && !ctx.Request.Path.Value!.EndsWith("swagger.json"), swaggerApp =>
+{
+    swaggerApp.Use(async (context, next) =>
     {
-        o.SwaggerEndpoint("/swagger/v1/swagger.json", "SamaraClouds API v1");
-        o.DocumentTitle = "SamaraClouds API Docs";
+        if (!context.User.Identity?.IsAuthenticated ?? true)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsync("Unauthorized");
+            return;
+        }
+
+        // Hanya allow admin (ubah "Admin" ke role lain jika perlu)
+        if (!context.User.IsInRole("Admin"))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Forbidden");
+            return;
+        }
+
+        await next();
     });
-}
+});
 
-// app.UseCors("AllowAll"); // Uncomment jika aktifkan CORS
 
+app.UseSwagger();
+app.UseSwaggerUI(o =>
+{
+    o.SwaggerEndpoint("/swagger/v1/swagger.json", "SamaraClouds API v1");
+    o.DocumentTitle = "SamaraClouds API Docs";
+});
+
+// [10] Auth
 app.UseAuthentication();
 app.UseAuthorization();
 
